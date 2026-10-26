@@ -14,7 +14,7 @@ import java.nio.file.Path;
  * usage: java Gen.java <ascii.png from the vanilla client> <out dir>
  *
  * Panel geometry (generic_54): 176x222, menu slots from (7,17) 18 px apart, inventory label at y 128,
- * player inventory from y 139, hotbar at y 197. Overlays are 256x256 with the panel at (0,0).
+ * player inventory from y 139, hotbar at y 197. Overlays are 176x222 glyphs aligned with the panel.
  */
 public class Gen {
 
@@ -41,17 +41,17 @@ public class Gen {
         }
         Path out = Path.of(a[1]);
         save(base(), out.resolve("assets/minecraft/textures/gui/container/generic_54.png"));
-        save(kits(), out.resolve("assets/kitpvp/textures/gui/kits.png"));
-        save(loadout(), out.resolve("assets/kitpvp/textures/gui/loadout.png"));
-        save(boards(), out.resolve("assets/kitpvp/textures/gui/boards.png"));
+        save(crop(kits()), out.resolve("assets/kitpvp/textures/gui/kits.png"));
+        save(crop(loadout()), out.resolve("assets/kitpvp/textures/gui/loadout.png"));
+        save(crop(boards()), out.resolve("assets/kitpvp/textures/gui/boards.png"));
         save(logo(), out.resolve("pack.png"));
         write(out.resolve("assets/kitpvp/font/gui.json"), """
                 {
                   "providers": [
-                    {"type": "bitmap", "file": "kitpvp:gui/kits.png", "ascent": 13, "height": 256, "chars": ["\\ue000"]},
-                    {"type": "bitmap", "file": "kitpvp:gui/loadout.png", "ascent": 13, "height": 256, "chars": ["\\ue001"]},
-                    {"type": "bitmap", "file": "kitpvp:gui/boards.png", "ascent": 13, "height": 256, "chars": ["\\ue002"]},
-                    {"type": "space", "advances": {"\\uf000": -8, "\\uf001": -249}}
+                    {"type": "bitmap", "file": "kitpvp:gui/kits.png", "ascent": 13, "height": 222, "chars": ["\\ue000"]},
+                    {"type": "bitmap", "file": "kitpvp:gui/loadout.png", "ascent": 13, "height": 222, "chars": ["\\ue001"]},
+                    {"type": "bitmap", "file": "kitpvp:gui/boards.png", "ascent": 13, "height": 222, "chars": ["\\ue002"]},
+                    {"type": "space", "advances": {"\\uf000": -8, "\\uf001": -169}}
                   ]
                 }
                 """);
@@ -79,6 +79,13 @@ public class Gen {
     static void write(Path p, String s) throws IOException {
         Files.createDirectories(p.getParent());
         Files.writeString(p, s);
+    }
+
+    /** Overlay glyphs are exactly the panel size: 176x222 fits the client's 256 px font pages. */
+    static BufferedImage crop(BufferedImage g) {
+        BufferedImage out = new BufferedImage(176, 222, BufferedImage.TYPE_INT_ARGB);
+        for (int x = 0; x < 176; x++) for (int y = 0; y < 222; y++) out.setRGB(x, y, g.getRGB(x, y));
+        return out;
     }
 
     static BufferedImage canvas() {
