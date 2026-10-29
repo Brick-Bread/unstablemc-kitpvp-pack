@@ -77,6 +77,33 @@ public class Gen {
                   ]
                 }
                 """);
+        // the supply drop crate: an item model (kitpvp:supply_drop) the plugin shows on an item display
+        save(crateSide(), out.resolve("assets/kitpvp/textures/item/supply_side.png"));
+        save(crateTop(), out.resolve("assets/kitpvp/textures/item/supply_top.png"));
+        save(crateLight(), out.resolve("assets/kitpvp/textures/item/supply_light.png"));
+        write(out.resolve("assets/kitpvp/items/supply_drop.json"), """
+                {"model": {"type": "minecraft:model", "model": "kitpvp:item/supply_drop"}}
+                """);
+        write(out.resolve("assets/kitpvp/models/item/supply_drop.json"), """
+                {
+                  "textures": {"side": "kitpvp:item/supply_side", "top": "kitpvp:item/supply_top", "light": "kitpvp:item/supply_light",
+                               "particle": "kitpvp:item/supply_side"},
+                  "elements": [
+                    {"from": [1, 0, 1], "to": [15, 13, 15],
+                     "faces": {"north": {"uv": [0, 0, 16, 16], "texture": "#side"}, "south": {"uv": [0, 0, 16, 16], "texture": "#side"},
+                               "east": {"uv": [0, 0, 16, 16], "texture": "#side"}, "west": {"uv": [0, 0, 16, 16], "texture": "#side"},
+                               "up": {"uv": [0, 0, 16, 16], "texture": "#top"}, "down": {"uv": [0, 0, 16, 16], "texture": "#top"}}},
+                    {"from": [6, 13, 6], "to": [10, 15, 10], "light_emission": 15,
+                     "faces": {"north": {"uv": [0, 0, 16, 8], "texture": "#light"}, "south": {"uv": [0, 0, 16, 8], "texture": "#light"},
+                               "east": {"uv": [0, 0, 16, 8], "texture": "#light"}, "west": {"uv": [0, 0, 16, 8], "texture": "#light"},
+                               "up": {"uv": [0, 8, 16, 16], "texture": "#light"}}},
+                    {"from": [12, 13, 7.5], "to": [13, 19, 8.5],
+                     "faces": {"north": {"uv": [0, 0, 2, 16], "texture": "#top"}, "south": {"uv": [0, 0, 2, 16], "texture": "#top"},
+                               "east": {"uv": [0, 0, 2, 16], "texture": "#top"}, "west": {"uv": [0, 0, 2, 16], "texture": "#top"},
+                               "up": {"uv": [0, 0, 2, 2], "texture": "#light"}}}
+                  ]
+                }
+                """);
         // the border players see is KitPvP's own wall; the vanilla one (also used for the red screen
         // warning near the edge) is drawn fully transparent
         save(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), out.resolve("assets/minecraft/textures/misc/forcefield.png"));
@@ -742,6 +769,70 @@ public class Gen {
                 else col = new Color(0x40, 0x04, 0x0A, 18);
             }
             g.setRGB(x, f * n + y, col.getRGB());
+        }
+        return g;
+    }
+
+    /**
+     * Supply crate side (32x32): dark plated panel in a pink-to-purple frame, gold corner brackets,
+     * rivets, two hazard bands, and a glowing gold comet emblem in the middle.
+     */
+    static BufferedImage crateSide() {
+        int n = 32;
+        BufferedImage g = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);
+        Color plate = new Color(0x221E33), plate2 = new Color(0x2C2742), dark = new Color(0x0F0E16);
+        for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) g.setRGB(x, y, ((x / 4 + y / 4) % 2 == 0 ? plate : plate2).getRGB());
+        // frame: 2 px pink to purple, dark inner line
+        for (int i = 0; i < n; i++) for (int w = 0; w < 2; w++) {
+            Color c = mix(PINK, PURPLE, i / (double) n);
+            g.setRGB(i, w, c.getRGB()); g.setRGB(i, n - 1 - w, mix(PURPLE, PINK, i / (double) n).getRGB());
+            g.setRGB(w, i, c.getRGB()); g.setRGB(n - 1 - w, i, mix(PURPLE, PINK, i / (double) n).getRGB());
+        }
+        for (int i = 2; i < n - 2; i++) { g.setRGB(i, 2, dark.getRGB()); g.setRGB(i, n - 3, dark.getRGB()); g.setRGB(2, i, dark.getRGB()); g.setRGB(n - 3, i, dark.getRGB()); }
+        // gold corner brackets and rivets
+        int[][] cs = {{3, 3, 1, 1}, {n - 4, 3, -1, 1}, {3, n - 4, 1, -1}, {n - 4, n - 4, -1, -1}};
+        for (int[] c : cs) {
+            for (int k = 0; k < 6; k++) { g.setRGB(c[0] + k * c[2], c[1], GOLD.getRGB()); g.setRGB(c[0], c[1] + k * c[3], GOLD.getRGB()); }
+            g.setRGB(c[0] + 2 * c[2], c[1] + 2 * c[3], new Color(0xFFF2A0).getRGB());
+        }
+        // hazard bands top and bottom
+        for (int x = 5; x < n - 5; x++) for (int y : new int[]{6, 7, 24, 25}) g.setRGB(x, y, (Math.floorMod(x + y, 4) < 2 ? PINK : dark).getRGB());
+        // comet emblem: a gold star with a tail
+        int cx = 17, cy = 15;
+        for (int dx = -2; dx <= 2; dx++) for (int dy = -2; dy <= 2; dy++) if (Math.abs(dx) + Math.abs(dy) <= 2) g.setRGB(cx + dx, cy + dy, GOLD.getRGB());
+        g.setRGB(cx, cy, new Color(0xFFFFFF).getRGB());
+        for (int k = 1; k <= 6; k++) {
+            blend(g, cx - 2 - k, cy + k / 2 + 1, alpha(GOLD, 220 - k * 30));
+            blend(g, cx - 2 - k, cy + k / 2, alpha(new Color(0xFF7518), 200 - k * 28));
+        }
+        return g;
+    }
+
+    /** Supply crate lid (32x32): plated, gold cross straps, a hatch in the middle. */
+    static BufferedImage crateTop() {
+        int n = 32;
+        BufferedImage g = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);
+        Color plate = new Color(0x26223A), plate2 = new Color(0x2F2A47), dark = new Color(0x0F0E16);
+        for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) g.setRGB(x, y, ((x / 4 + y / 4) % 2 == 0 ? plate : plate2).getRGB());
+        for (int i = 0; i < n; i++) for (int w = 0; w < 2; w++) {
+            Color c = mix(PINK, PURPLE, i / (double) n);
+            g.setRGB(i, w, c.getRGB()); g.setRGB(i, n - 1 - w, c.getRGB()); g.setRGB(w, i, c.getRGB()); g.setRGB(n - 1 - w, i, c.getRGB());
+        }
+        for (int i = 2; i < n - 2; i++) for (int w = -1; w <= 1; w++) { g.setRGB(i, n / 2 + w, (w == 0 ? GOLD : new Color(0x8A6A00)).getRGB()); g.setRGB(n / 2 + w, i, (w == 0 ? GOLD : new Color(0x8A6A00)).getRGB()); }
+        for (int x = 11; x < 21; x++) for (int y = 11; y < 21; y++) {
+            boolean edge = x == 11 || x == 20 || y == 11 || y == 20;
+            g.setRGB(x, y, (edge ? dark : new Color(0x3A3456)).getRGB());
+        }
+        return g;
+    }
+
+    /** The beacon light on top (16x16): top half the sides (pink glow with a white core), bottom half its top. */
+    static BufferedImage crateLight() {
+        BufferedImage g = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        for (int x = 0; x < 16; x++) for (int y = 0; y < 16; y++) {
+            double d = Math.abs(x - 7.5) / 8.0;
+            Color c = y < 8 ? mix(new Color(0xFFFFFF), PINK, d * 1.4 + (y < 2 || y > 5 ? 0.3 : 0)) : mix(new Color(0xFFFFFF), PINK, Math.hypot(x - 7.5, y - 11.5) / 6.0);
+            g.setRGB(x, y, c.getRGB());
         }
         return g;
     }
