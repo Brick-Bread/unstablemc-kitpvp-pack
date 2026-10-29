@@ -64,8 +64,11 @@ public class Gen {
                 {"ui.click", "ui/click", "Click"}, {"ui.confirm", "ui/confirm", "Confirmed"}};
         StringBuilder sj = new StringBuilder("{\n");
         for (int i = 0; i < sfx.length; i++) {
+            // tiny sounds that play all the time are kept in memory so the first one doesn't stutter
+            boolean preload = java.util.Set.of("ui.click", "ui.tick", "ui.confirm", "kill.confirm").contains(sfx[i][0]);
             sj.append("  \"").append(sfx[i][0]).append("\": {\"sounds\": [{\"name\": \"kitpvp:").append(sfx[i][1])
-                    .append("\"}], \"subtitle\": \"").append(sfx[i][2]).append("\"}").append(i < sfx.length - 1 ? ",\n" : "\n");
+                    .append(preload ? "\", \"preload\": true" : "\"").append("}], \"subtitle\": \"").append(sfx[i][2]).append("\"}")
+                    .append(i < sfx.length - 1 ? ",\n" : "\n");
         }
         write(out.resolve("assets/kitpvp/sounds.json"), sj.append("}\n").toString());
         write(out.resolve("assets/kitpvp/font/gui.json"), """

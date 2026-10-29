@@ -17,7 +17,9 @@ F=$S/fs
 mkdir -p src/sounds/strike src/sounds/drop src/sounds/gadget src/sounds/kill src/sounds/round src/sounds/ui
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
-OUT="-map_metadata -1 -fflags +bitexact -ac 1 -ar 44100 -c:a libvorbis -q:a 6"
+# Vorbis quality per tier, to keep the pack small: loud events q4 at 44.1 kHz, soft UI and feedback
+# blips q3 at 32 kHz (they have little high end worth keeping)
+OUT="-map_metadata -1 -fflags +bitexact -ac 1 -c:a libvorbis"
 BIG=-12 MID=-15 SOFT=-18
 ff() { "$FFMPEG" -hide_banner -loglevel error -y "$@"; }
 # "<integrated LUFS> <true peak>" of $1, padded to one 400 ms gating block so blips measure too
@@ -38,7 +40,8 @@ mix() {
     mv "$T/c.wav" "$T/b.wav"
   done
   d=$("${FFMPEG%ffmpeg}ffprobe" -v error -show_entries format=duration -of csv=p=0 "$T/b.wav")
-  ff -i "$T/b.wav" -af "afade=t=out:st=$(awk -v d="$d" 'BEGIN { print d - 0.02 }'):d=0.02" $OUT "$out"
+  if [ "$lufs" = "$SOFT" ]; then q="-q:a 3 -ar 32000"; else q="-q:a 4 -ar 44100"; fi
+  ff -i "$T/b.wav" -af "afade=t=out:st=$(awk -v d="$d" 'BEGIN { print d - 0.02 }'):d=0.02" $OUT $q "$out"
 }
 
 # strikes
