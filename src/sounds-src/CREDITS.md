@@ -57,3 +57,10 @@ What each pack sound is made of:
 - `ui/tick`: basarunder's Countdown 1.
 - `ui/click`: TommyListens' UI Click.
 - `ui/confirm`: MATUSTRM's UI_Confirm.
+
+## Lobby music
+
+| Event | Source | Author | Licence |
+|---|---|---|---|
+| `music.lobby1` | [Synthwave Loop [95 BPM]](https://freesound.org/people/LulSayer/sounds/699241/) | LulSayer | CC0 |
+| `music.lobby2` | [JH Synthwave \ Synth Pop (100% loopable)](https://freesound.org/people/Johnnie_Holiday/sounds/697437/) | Johnnie_Holiday | **CC-BY 4.0**: credit required (this line, and the pack README) |

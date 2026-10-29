@@ -49,6 +49,24 @@ public class Gen {
         // the world border: prism texture, and the vanilla 26.3 shader with the border's
         // blue/red tint taken out (its alpha, the fade with distance, stays) so the design keeps its colours
         save(forcefield(), out.resolve("assets/minecraft/textures/misc/forcefield.png"));
+        // the zone wall: item displays of kitpvp:zone_panel, a flat double-sided plane with an animated
+        // prism texture (32 frames, each the bands shifted one pixel, interpolated: a seamless loop)
+        save(zonePanel(), out.resolve("assets/kitpvp/textures/item/zone_panel.png"));
+        write(out.resolve("assets/kitpvp/textures/item/zone_panel.png.mcmeta"), """
+                {"animation": {"frametime": 2, "interpolate": true}}
+                """);
+        write(out.resolve("assets/kitpvp/items/zone_panel.json"), """
+                {"model": {"type": "minecraft:model", "model": "kitpvp:item/zone_panel"}}
+                """);
+        write(out.resolve("assets/kitpvp/models/item/zone_panel.json"), """
+                {
+                  "textures": {"0": "kitpvp:item/zone_panel", "particle": "kitpvp:item/zone_panel"},
+                  "elements": [
+                    {"from": [0, 0, 8], "to": [16, 16, 8], "shade": false, "light_emission": 15,
+                     "faces": {"north": {"uv": [0, 0, 16, 16], "texture": "#0"}, "south": {"uv": [16, 0, 0, 16], "texture": "#0"}}}
+                  ]
+                }
+                """);
         write(out.resolve("assets/minecraft/shaders/core/world_border.fsh"), """
                 #version 330
                 #extension GL_ARB_separate_shader_objects : require
@@ -96,7 +114,7 @@ public class Gen {
         // strike and supply-drop sounds: the .ogg files come from sounds.sh (src/sounds), build.sh copies them
         String[][] sfx = {{"strike.charge", "strike/charge", "Strike charging"}, {"strike.siren", "strike/siren", "Strike siren"},
                 {"strike.impact", "strike/impact", "Strike impact"}, {"drop.incoming", "drop/incoming", "Supply drop incoming"},
-                {"drop.land", "drop/land", "Supply drop lands"}, {"strike.wither", "strike/wither", "Wither skulls launch"},
+                {"drop.land", "drop/land", "Supply drop lands"}, {"music.lobby1", "music/lobby1", "Lobby music"}, {"music.lobby2", "music/lobby2", "Lobby music"}, {"strike.wither", "strike/wither", "Wither skulls launch"},
                 {"strike.mob", "strike/mob", "Monsters roar"}, {"drop.pickup", "drop/pickup", "Supply drop opened"},
                 {"gadget.ready", "gadget/ready", "Gadget ready"}, {"gadget.use", "gadget/use", "Gadget used"},
                 {"kill.confirm", "kill/confirm", "Kill confirmed"}, {"kill.streak", "kill/streak", "Kill streak"},
@@ -108,8 +126,10 @@ public class Gen {
         for (int i = 0; i < sfx.length; i++) {
             // tiny sounds that play all the time are kept in memory so the first one doesn't stutter
             boolean preload = java.util.Set.of("ui.click", "ui.tick", "ui.confirm", "kill.confirm").contains(sfx[i][0]);
+            // music is long: streamed from disk instead of loaded whole
+            boolean stream = sfx[i][0].startsWith("music.");
             sj.append("  \"").append(sfx[i][0]).append("\": {\"sounds\": [{\"name\": \"kitpvp:").append(sfx[i][1])
-                    .append(preload ? "\", \"preload\": true" : "\"").append("}], \"subtitle\": \"").append(sfx[i][2]).append("\"}")
+                    .append(preload ? "\", \"preload\": true" : stream ? "\", \"stream\": true" : "\"").append("}], \"subtitle\": \"").append(sfx[i][2]).append("\"}")
                     .append(i < sfx.length - 1 ? ",\n" : "\n");
         }
         write(out.resolve("assets/kitpvp/sounds.json"), sj.append("}\n").toString());
@@ -512,7 +532,7 @@ public class Gen {
 
     /**
      * The corner radar HUD (radar-hud-spec.md): the title of an invisible boss bar, made of glyphs from
-     * kitpvp:radar. text.vsh spots the HUD's #FEFEFE text and moves it from top centre to the top-right
+     * kitpvp:radar. text.vsh spots the HUD's #FEFEFE text and moves it from top centre to the top-left
      * corner. Glyph tops sit 16 px below the text line (ascent -9 - row), every image is opaque in its
      * leftmost and rightmost column so the advances are exact.
      */
@@ -592,15 +612,14 @@ public class Gen {
                 void main() {
                 #ifdef IS_GUI
                     // KitPvP radar HUD: the invisible boss bar's #FEFEFE title moves from top centre to the
-                    // top-right corner (89 wide, right edge 4 px from the screen edge, top at y = 4)
+                    // top-left corner (89 wide, 4 px in from the left edge, top at y = 4)
                     bool radarHud = all(lessThan(abs(Color.rgb * 255.0 - vec3(254.0)), vec3(0.6)));
                     vec3 pos = Position;
                     if (radarHud) {
                         float guiW = 2.0 / ProjMat[0][0];
-                        // the title starts at floor(guiW / 2) - 44; move it so the map's left edge lands on a
-                        // whole pixel, 4 px in from the right: guiW - 4 - 89
+                        // the title starts at floor(guiW / 2) - 44; move it to the top-left corner, 4 px in
                         float w = floor(guiW + 0.5);
-                        pos = Position + vec3(w - 93.0 - (floor(w / 2.0) - 44.0), -15.0, 0.0);
+                        pos = Position + vec3(4.0 - (floor(w / 2.0) - 44.0), -15.0, 0.0);
                     }
                     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
                 #else
@@ -668,6 +687,24 @@ public class Gen {
 
     static Color shade(Color c, double k) {
         return new Color((int) Math.min(255, c.getRed() * k), (int) Math.min(255, c.getGreen() * k), (int) Math.min(255, c.getBlue() * k));
+    }
+
+    /**
+     * The zone wall panel: 32x32 frames stacked 32 high, each one the diagonal prism bands moved one
+     * pixel along, so frame 32 wraps exactly onto frame 1. Tiled edge to edge on the wall, the bands
+     * line up across panels (the pattern repeats every 32 px both ways).
+     */
+    static BufferedImage zonePanel() {
+        int n = 32, frames = 32;
+        BufferedImage g = new BufferedImage(n, n * frames, BufferedImage.TYPE_INT_ARGB);
+        int[] cols = {0xFF2E63, 0xFF7518, 0xFFD900, 0x3CFF6A, 0x29D4FF, 0x8A4BFF, 0xFF2E9A, 0xFF2E63};
+        for (int f = 0; f < frames; f++) for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) {
+            int c = cols[Math.floorMod(x + y + f, n) * 8 / n];
+            boolean glint = Math.floorMod(x - y + f * 2, n) == 0;
+            Color col = glint ? new Color(255, 255, 255, 150) : new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, 120);
+            g.setRGB(x, f * n + y, col.getRGB());
+        }
+        return g;
     }
 
     /** pack.png: the KITPVP logo. */

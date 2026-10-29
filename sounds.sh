@@ -86,3 +86,10 @@ mix $SOFT src/sounds/ui/tick.ogg -i $F/515317-basarunder.mp3 -filter_complex "[0
 mix $SOFT src/sounds/ui/click.ogg -i $F/839832-TommyListens.mp3 -filter_complex "[0:a]anull"
 mix $SOFT src/sounds/ui/confirm.ogg -i $F/836200-MATUSTRM.mp3 -filter_complex "[0:a]atrim=0:1.0,afade=t=out:st=0.6:d=0.4"
 ls -l src/sounds/*/
+
+# lobby music: two synthwave loops, streamed; mono 32 kHz q2 keeps them small (they're background)
+mkdir -p src/sounds/music
+for t in "699241-LulSayer.mp3 lobby1" "697437-Johnnie_Holiday.mp3 lobby2"; do
+  set -- $t
+  ff -i "$F/$1" -af "loudnorm=I=-18:TP=-1.5:LRA=11,afade=t=in:d=0.4" -map_metadata -1 -fflags +bitexact -ac 1 -ar 32000 -c:a libvorbis -q:a 2 "src/sounds/music/$2.ogg"
+done

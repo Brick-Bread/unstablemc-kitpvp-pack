@@ -10,3 +10,7 @@ The server requires it (server.properties `resource-pack` + `resource-pack-sha1`
 
 Font `kitpvp:gui`: `` kits, `` loadout, `` leaderboards, `` = -8 px,
 `` = -249 px (back to the normal title position).
+
+## Credits
+
+Lobby music "JH Synthwave \\ Synth Pop (100% loopable)" by Johnnie_Holiday (https://freesound.org/people/Johnnie_Holiday/sounds/697437/), CC-BY 4.0. Other sounds are CC0; see src/sounds-src/CREDITS.md.
