@@ -185,6 +185,7 @@ public class Gen {
                 }
                 """);
         radarHud(out);
+        TabGen.build(out); // the custom tab list (src/TabGen.java)
         // the panel draws its own INVENTORY label; vanilla's dark grey one would vanish on it
         String lang = "{\n  \"container.inventory\": \"\"\n}\n";
         for (String l : new String[]{"en_us", "en_gb", "en_ca", "en_au", "en_nz"}) write(out.resolve("assets/minecraft/lang/" + l + ".json"), lang);
