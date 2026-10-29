@@ -46,6 +46,46 @@ public class Gen {
         save(crop(boards()), out.resolve("assets/kitpvp/textures/gui/boards.png"));
         save(logo(), out.resolve("pack.png"));
         save(strike(), out.resolve("assets/kitpvp/textures/gui/strike.png"));
+        // the world border: exploit-glitch texture, and the vanilla 26.3 shader with the border's
+        // blue/red tint taken out (its alpha, the fade with distance, stays) so the design keeps its colours
+        save(forcefield(), out.resolve("assets/minecraft/textures/misc/forcefield.png"));
+        write(out.resolve("assets/minecraft/shaders/core/world_border.fsh"), """
+                #version 330
+                #extension GL_ARB_separate_shader_objects : require
+
+                #include <minecraft:dynamictransforms.glsl>
+                #include <minecraft:oit.glsl>
+
+                uniform sampler2D Sampler0;
+
+                layout(location = 0) in vec2 texCoord0;
+
+                #ifndef OIT_ALPHA_ONLY
+                layout(location = 0) out vec4 fragColor;
+                #endif
+
+                vec4 calculateFinalColor(vec4 color) {
+                    // KitPvP: keep the texture's own colours, only fade with the border's alpha
+                    color.a *= ColorModulator.a;
+                    #ifdef OIT_ACCUMULATE
+                    color = sampleColorForAccumulation(color);
+                    #endif
+                    return color;
+                }
+
+                void main() {
+                    vec4 color = texture(Sampler0, texCoord0);
+                    if (color.a == 0.0) {
+                        discard;
+                    }
+
+                    #ifdef OIT_ALPHA_ONLY
+                    executeAlphaOnlyPhase(gl_FragCoord.z, color.a * ColorModulator.a);
+                    #else
+                    fragColor = calculateFinalColor(color);
+                    #endif
+                }
+                """);
         // the radar (a held map): frame with compass letters, and its markers
         save(mapFrame(), out.resolve("assets/minecraft/textures/map/map_background.png"));
         save(arrowMarker(new Color(0xFFFFFF), PINK), out.resolve("assets/minecraft/textures/map/decorations/player.png"));
@@ -445,6 +485,30 @@ public class Gen {
             g.setRGB(x, y, (edge ? dark : (y < 7 ? light : gold)).getRGB());
         }
         for (int y = 6; y < 10; y++) for (int x = 7; x < 9; x++) g.setRGB(x, y, new Color(0xFF2E63).getRGB()); // the latch
+        return g;
+    }
+
+    /**
+     * The world border, in Spoke's exploit-glitch look: a seamless 32x32 tile (about 16 px per block,
+     * like vanilla) of dark-navy haze, faint cyan scanlines, and cyan and red glitch tears with a few
+     * white sparks. The border scrolls it, which makes the tears drift.
+     */
+    static BufferedImage forcefield() {
+        int n = 32;
+        BufferedImage g = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);
+        java.util.Random r = new java.util.Random(20261029L);
+        Color haze = new Color(0x0E, 0x1A, 0x2B, 70), scan = new Color(0x29, 0xD4, 0xFF, 75);
+        Color cyan = new Color(0x29, 0xD4, 0xFF, 220), red = new Color(0xFF, 0x18, 0x2B, 220), spark = new Color(255, 255, 255, 210);
+        for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) g.setRGB(x, y, (y % 3 == 0 ? mix(haze, scan, 1) : haze).getRGB());
+        int[][] tears = {{2, 3, 11, 1}, {18, 8, 9, 2}, {5, 15, 16, 1}, {24, 20, 12, 1}, {9, 26, 7, 2}, {27, 12, 6, 1}};
+        for (int k = 0; k < tears.length; k++) {
+            int[] t = tears[k];
+            Color c = k % 3 == 1 ? red : cyan;
+            for (int x = t[0]; x < t[0] + t[2]; x++) for (int y = t[1]; y < t[1] + t[3]; y++) g.setRGB(Math.floorMod(x, n), Math.floorMod(y, n), c.getRGB());
+            // a red/cyan offset on the cyan tears (chromatic split)
+            if (c == cyan) g.setRGB(Math.floorMod(t[0] + t[2], n), t[1], red.getRGB());
+        }
+        for (int k = 0; k < 6; k++) g.setRGB(r.nextInt(n), r.nextInt(n), spark.getRGB());
         return g;
     }
 
