@@ -124,6 +124,7 @@ public class Gen {
                   ]
                 }
                 """);
+        radarHud(out);
         // the panel draws its own INVENTORY label; vanilla's dark grey one would vanish on it
         String lang = "{\n  \"container.inventory\": \"\"\n}\n";
         for (String l : new String[]{"en_us", "en_gb", "en_ca", "en_au", "en_nz"}) write(out.resolve("assets/minecraft/lang/" + l + ".json"), lang);
@@ -505,6 +506,168 @@ public class Gen {
         }
         for (int x = 0; x < n; x++) blend(g, x, Math.floorMod(-x, n), new Color(255, 255, 255, 120));
         return g;
+    }
+
+    // ------------------------------------------------------------------ the radar HUD
+
+    /**
+     * The corner radar HUD (radar-hud-spec.md): the title of an invisible boss bar, made of glyphs from
+     * kitpvp:radar. text.vsh spots the HUD's #FEFEFE text and moves it from top centre to the top-right
+     * corner. Glyph tops sit 16 px below the text line (ascent -9 - row), every image is opaque in its
+     * leftmost and rightmost column so the advances are exact.
+     */
+    static void radarHud(Path out) throws IOException {
+        Path tex = out.resolve("assets/kitpvp/textures/gui/radar");
+        save(radarBg(), tex.resolve("bg.png"));
+        Color outline = new Color(0x15131F), gold = GOLD, brown = new Color(0x5A3A00);
+        BufferedImage enemy = new BufferedImage(3, 3, BufferedImage.TYPE_INT_ARGB);
+        fill(enemy, 0, 0, 3, 3, PINK);
+        save(enemy, tex.resolve("enemy.png"));
+        BufferedImage self = new BufferedImage(5, 5, BufferedImage.TYPE_INT_ARGB);
+        fill(self, 0, 0, 5, 5, outline);
+        fill(self, 1, 1, 3, 3, Color.WHITE);
+        save(self, tex.resolve("self.png"));
+        BufferedImage drop = new BufferedImage(5, 5, BufferedImage.TYPE_INT_ARGB);
+        for (int i = 0; i < 5; i++) {
+            drop.setRGB(i, i, gold.getRGB());
+            drop.setRGB(4 - i, i, gold.getRGB());
+        }
+        drop.setRGB(2, 2, brown.getRGB());
+        save(drop, tex.resolve("drop.png"));
+        // corners: an L of one row and one column; the row's far end covers the other side column
+        String[] corners = {"tl", "tr", "bl", "br"};
+        for (String k : corners) {
+            BufferedImage c = new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB);
+            int row = k.charAt(0) == 't' ? 0 : 3, col = k.charAt(1) == 'l' ? 0 : 3;
+            fill(c, 0, row, 4, 1, PINK);
+            fill(c, col, 0, 1, 4, PINK);
+            save(c, tex.resolve("corner_" + k + ".png"));
+        }
+
+        StringBuilder f = new StringBuilder("{\n  \"providers\": [\n");
+        f.append(provider("bg", 0xE100, 88, -9));
+        for (int r = 0; r < 88; r++) f.append(provider("enemy", 0xE200 + r, 3, -8 - r));
+        for (int r = 0; r < 88; r++) f.append(provider("self", 0xE300 + r, 5, -7 - r));
+        for (int r = 0; r < 88; r++) f.append(provider("drop", 0xE400 + r, 5, -7 - r));
+        for (int k = 0; k < 4; k++) for (int t = 0; t < 85; t++) f.append(provider("corner_" + corners[k], 0xE500 + k * 0x100 + t, 4, -9 - t));
+        f.append("    {\"type\": \"space\", \"advances\": {");
+        for (int b = 0; b < 8; b++) f.append(String.format("\"\\u%04x\": %d, ", 0xF801 + b, -(1 << b)));
+        for (int b = 0; b < 8; b++) f.append(String.format("\"\\u%04x\": %d%s", 0xF811 + b, 1 << b, b < 7 ? ", " : ""));
+        f.append("}}\n  ]\n}\n");
+        write(out.resolve("assets/kitpvp/font/radar.json"), f.toString());
+
+        // the boss bar carrying the HUD is invisible: transparent white sprites (vanilla 182x5)
+        for (String s : new String[]{"white_background", "white_progress"})
+            save(new BufferedImage(182, 5, BufferedImage.TYPE_INT_ARGB), out.resolve("assets/minecraft/textures/gui/sprites/boss_bar/" + s + ".png"));
+
+        // vanilla 26.3 text.vsh, plus the HUD move for GUI text (IS_GUI); world text is untouched
+        write(out.resolve("assets/minecraft/shaders/core/text.vsh"), """
+                #version 330
+                #extension GL_ARB_separate_shader_objects : require
+
+                #if !defined(IS_GUI) && !defined(IS_SEE_THROUGH)
+                #include <minecraft:fog.glsl>
+                #include <minecraft:sample_lightmap.glsl>
+                #endif
+
+                #include <minecraft:dynamictransforms.glsl>
+                #include <minecraft:projection.glsl>
+
+                layout(location = 0) in vec3 Position;
+                layout(location = 1) in vec4 Color;
+                layout(location = 2) in vec2 UV0;
+                #if !defined(IS_GUI) && !defined(IS_SEE_THROUGH)
+                layout(location = 3) in ivec2 UV2;
+                #endif
+
+                #if !defined(IS_GUI) && !defined(IS_SEE_THROUGH)
+                uniform sampler2D Sampler2;
+                layout(location = 0) out float sphericalVertexDistance;
+                layout(location = 1) out float cylindricalVertexDistance;
+                #endif
+
+                layout(location = 2) out vec4 vertexColor;
+                layout(location = 3) out vec2 texCoord0;
+
+                void main() {
+                #ifdef IS_GUI
+                    // KitPvP radar HUD: the invisible boss bar's #FEFEFE title moves from top centre to the
+                    // top-right corner (89 wide, right edge 4 px from the screen edge, top at y = 4)
+                    bool radarHud = all(lessThan(abs(Color.rgb * 255.0 - vec3(254.0)), vec3(0.6)));
+                    vec3 pos = Position;
+                    if (radarHud) {
+                        float guiW = 2.0 / ProjMat[0][0];
+                        // the title starts at floor(guiW / 2) - 44; move it so the map's left edge lands on a
+                        // whole pixel, 4 px in from the right: guiW - 4 - 89
+                        float w = floor(guiW + 0.5);
+                        pos = Position + vec3(w - 93.0 - (floor(w / 2.0) - 44.0), -15.0, 0.0);
+                    }
+                    gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
+                #else
+                    gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
+                #endif
+
+                #if !defined(IS_GUI) && !defined(IS_SEE_THROUGH)
+                    sphericalVertexDistance = fog_spherical_distance(Position);
+                    cylindricalVertexDistance = fog_cylindrical_distance(Position);
+                    vertexColor = Color * sample_lightmap(Sampler2, UV2);
+                #else
+                    vertexColor = Color;
+                #endif
+                #ifdef IS_GUI
+                    if (radarHud) vertexColor = vec4(1.0);
+                #endif
+                    texCoord0 = UV0;
+                }
+                """);
+    }
+
+    static String provider(String image, int ch, int height, int ascent) {
+        return String.format("    {\"type\": \"bitmap\", \"file\": \"kitpvp:gui/radar/%s.png\", \"ascent\": %d, \"height\": %d, \"chars\": [\"\\u%04x\"]},%n",
+                image, ascent, height, ch);
+    }
+
+    /**
+     * The radar's background: a top-down map of the starting arena (x 140..900, z 220..980, north up)
+     * from src/radar-heights.txt (tools/radar_bg.py), coloured like the plugin's radar, in a 2 px
+     * pink->purple frame with a pink N at the top. Fully opaque.
+     */
+    static BufferedImage radarBg() throws IOException {
+        int n = 88;
+        java.util.List<String> lines = Files.readAllLines(Path.of("src/radar-heights.txt"));
+        int[][] h = new int[n][n];
+        for (int j = 0; j < n; j++) {
+            String[] v = lines.get(j).trim().split(" ");
+            for (int i = 0; i < n; i++) h[j][i] = Integer.parseInt(v[i]);
+        }
+        Color street = new Color(0x262534), ring = new Color(0x363448), plaza = new Color(0x46425C),
+                low = new Color(0x70628C), tall = new Color(0xD6C4EC);
+        BufferedImage g = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);
+        for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) {
+            int y = h[j][i];
+            Color c = y <= -8 ? street : y <= 2 ? ring : y <= 11 ? plaza : mix(low, tall, (y - 11) / 70.0);
+            int up = j > 0 ? h[j - 1][i] : y, left = i > 0 ? h[j][i - 1] : y;
+            if (y - Math.min(up, left) > 2) c = shade(c, 1.25);          // lit edge facing north-west
+            else if (Math.max(up, left) - y > 2) c = shade(c, 0.6);      // shadow under a taller neighbour
+            g.setRGB(i, j, c.getRGB());
+        }
+        // frame: the outer pixel in the gradient, the inner one the gradient dimmed
+        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) {
+            int d = Math.min(Math.min(i, j), Math.min(n - 1 - i, n - 1 - j));
+            if (d > 1) continue;
+            Color c = mix(PINK, PURPLE, (i + j) / (double) (2 * n - 2));
+            g.setRGB(i, j, (d == 0 ? c : mix(c, new Color(0x15131F), 0.45)).getRGB());
+        }
+        // N: a 4x5 pink letter on a dark tab hanging from the top frame's centre
+        fill(g, 41, 2, 6, 7, new Color(0x15131F));
+        String[] letter = {"#..#", "##.#", "#.##", "#..#", "#..#"};
+        for (int j = 0; j < 5; j++) for (int i = 0; i < 4; i++) if (letter[j].charAt(i) == '#') g.setRGB(42 + i, 3 + j, PINK.getRGB());
+        fill(g, 42, 0, 4, 2, PINK);
+        return g;
+    }
+
+    static Color shade(Color c, double k) {
+        return new Color((int) Math.min(255, c.getRed() * k), (int) Math.min(255, c.getGreen() * k), (int) Math.min(255, c.getBlue() * k));
     }
 
     /** pack.png: the KITPVP logo. */
