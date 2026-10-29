@@ -714,33 +714,32 @@ public class Gen {
     }
 
     /**
-     * A zone wall face: 32x32 frames stacked 32 high, each moved one step so frame 32 wraps onto frame 1.
-     * Inside: a faint prism wash under a bright diamond lattice (pink to purple), with a white scanline
-     * sweeping down. Outside: red and near-black hazard stripes sliding sideways.
-     * The patterns repeat every 32 px both ways, so neighbouring panels line up.
+     * A zone wall face: 64x64 frames (2 px per block on a 32-block panel) stacked 16 high, each one
+     * step along so frame 16 wraps onto frame 1. Mostly clear, so the wall reads as glowing lines, not
+     * a sheet of colour (and it fades out with distance instead of fogging the view).
+     * Inside: a diamond lattice (16 px cells) in a pink-purple blend with a soft halo and a thin white
+     * scanline sweeping down. Outside: thin red hazard stripes sliding sideways. Every pattern repeats
+     * within 64 px, so panels line up edge to edge.
      */
     static BufferedImage zonePanel(boolean inside) {
-        int n = 32, frames = 32;
+        int n = 64, frames = 16;
         BufferedImage g = new BufferedImage(n, n * frames, BufferedImage.TYPE_INT_ARGB);
-        int[] cols = {0xFF2E63, 0xFF7518, 0xFFD900, 0x3CFF6A, 0x29D4FF, 0x8A4BFF, 0xFF2E9A, 0xFF2E63};
         for (int f = 0; f < frames; f++) for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) {
-            Color col;
+            Color col = new Color(0, 0, 0, 0);
             if (inside) {
-                int c = cols[Math.floorMod(x + y + f, n) * 8 / n];
-                col = new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, 55);
-                // diamond lattice, 16 px cells
+                Color line = mix(PINK, PURPLE, 0.5 + 0.5 * Math.sin(2 * Math.PI * (x + y + f * 4) / n));
                 int d1 = Math.floorMod(x + y, 16), d2 = Math.floorMod(x - y, 16);
-                // the pink-purple blend repeats every 32 px too, so tile edges don't show
-                Color line = mix(PINK, PURPLE, 0.5 + 0.5 * Math.sin(2 * Math.PI * (x + y) / n));
-                if (d1 == 0 || d2 == 0) col = line;
-                else if (d1 == 1 || d2 == 1 || d1 == 15 || d2 == 15) col = alpha(line, 110);
-                // scanline sweeping down over the 32 frames
-                int scan = Math.floorMod(y - f, n);
-                if (scan == 0) col = new Color(255, 255, 255, 190);
-                else if (scan == 1) col = new Color(255, 255, 255, 90);
+                if (d1 == 0 || d2 == 0) col = alpha(line, 230);
+                else if (d1 == 1 || d2 == 1 || d1 == 15 || d2 == 15) col = alpha(line, 70);
+                else col = alpha(PURPLE, 14);
+                int scan = Math.floorMod(y - f * 4, n);
+                if (scan == 0) col = new Color(255, 255, 255, 170);
+                else if (scan == 1) col = new Color(255, 255, 255, 60);
             } else {
-                boolean red = Math.floorMod(x + y - f, 16) < 8;
-                col = red ? new Color(0xC0, 0x10, 0x28, 170) : new Color(0x14, 0x06, 0x0C, 140);
+                int st = Math.floorMod(x + y - f, 16);
+                if (st < 3) col = new Color(0xE0, 0x18, 0x30, 200);
+                else if (st == 3) col = new Color(0xE0, 0x18, 0x30, 70);
+                else col = new Color(0x40, 0x04, 0x0A, 18);
             }
             g.setRGB(x, f * n + y, col.getRGB());
         }
