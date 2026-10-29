@@ -46,10 +46,22 @@ public class Gen {
         save(crop(boards()), out.resolve("assets/kitpvp/textures/gui/boards.png"));
         save(logo(), out.resolve("pack.png"));
         save(strike(), out.resolve("assets/kitpvp/textures/gui/strike.png"));
+        // the radar (a held map): frame with compass letters, and its markers
+        save(mapFrame(), out.resolve("assets/minecraft/textures/map/map_background.png"));
+        save(arrowMarker(new Color(0xFFFFFF), PINK), out.resolve("assets/minecraft/textures/map/decorations/player.png"));
+        save(arrowMarker(new Color(0xFF3B4E), new Color(0x2A0008)), out.resolve("assets/minecraft/textures/map/decorations/red_marker.png"));
+        save(dropMarker(), out.resolve("assets/minecraft/textures/map/decorations/target_x.png"));
         // strike and supply-drop sounds: the .ogg files come from sounds.sh (src/sounds), build.sh copies them
         String[][] sfx = {{"strike.charge", "strike/charge", "Strike charging"}, {"strike.siren", "strike/siren", "Strike siren"},
                 {"strike.impact", "strike/impact", "Strike impact"}, {"drop.incoming", "drop/incoming", "Supply drop incoming"},
-                {"drop.land", "drop/land", "Supply drop lands"}};
+                {"drop.land", "drop/land", "Supply drop lands"}, {"strike.wither", "strike/wither", "Wither skulls launch"},
+                {"strike.mob", "strike/mob", "Monsters roar"}, {"drop.pickup", "drop/pickup", "Supply drop opened"},
+                {"gadget.ready", "gadget/ready", "Gadget ready"}, {"gadget.use", "gadget/use", "Gadget used"},
+                {"kill.confirm", "kill/confirm", "Kill confirmed"}, {"kill.streak", "kill/streak", "Kill streak"},
+                {"kill.shutdown", "kill/shutdown", "Streak shut down"}, {"round.start", "round/start", "Round starts"},
+                {"round.border", "round/border", "Border closing"}, {"round.sudden", "round/sudden", "Sudden death"},
+                {"round.win", "round/win", "Round won"}, {"ui.tick", "ui/tick", "Countdown ticks"},
+                {"ui.click", "ui/click", "Click"}, {"ui.confirm", "ui/confirm", "Confirmed"}};
         StringBuilder sj = new StringBuilder("{\n");
         for (int i = 0; i < sfx.length; i++) {
             sj.append("  \"").append(sfx[i][0]).append("\": {\"sounds\": [{\"name\": \"kitpvp:").append(sfx[i][1])
@@ -361,6 +373,75 @@ public class Gen {
             blend(g, k[0] + i * k[2], k[1] + w * k[3], red);
             blend(g, k[0] + w * k[2], k[1] + i * k[3], red);
         }
+        return g;
+    }
+
+    /**
+     * The held-map background, which shows as the border around the radar. The client draws it from
+     * -7 to 135 around the 128 px map, so at 284 px the border is 14 px: room for N, E, S, W.
+     */
+    static BufferedImage mapFrame() {
+        int n = 284, b = 14;
+        BufferedImage g = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);
+        panel(g, 0, 0, n, n, new Color(0x151320));
+        // inner bevel where the map sits
+        for (int i = b - 2; i < n - b + 2; i++) {
+            for (int w = 0; w < 2; w++) {
+                g.setRGB(i, b - 2 + w, SLOT_DARK.getRGB());
+                g.setRGB(b - 2 + w, i, SLOT_DARK.getRGB());
+                g.setRGB(i, n - b + w, SLOT_LIGHT.getRGB());
+                g.setRGB(n - b + w, i, SLOT_LIGHT.getRGB());
+            }
+        }
+        // ticks every 1/8 along each edge
+        for (int k = 1; k < 8; k++) {
+            if (k == 4) continue; // the letters sit there
+            int p = b + (n - 2 * b) * k / 8;
+            for (int t = 0; t < 4; t++) {
+                blend(g, p, b - 6 + t, alpha(MUTED, 160));
+                blend(g, p, n - b + 2 + t, alpha(MUTED, 160));
+                blend(g, b - 6 + t, p, alpha(MUTED, 160));
+                blend(g, n - b + 2 + t, p, alpha(MUTED, 160));
+            }
+        }
+        // compass letters in the border (vanilla font, 8 px)
+        centered(g, n / 2, 3, "N", 1, PINK, null);
+        centered(g, n / 2, n - 11, "S", 1, TEXT, null);
+        centered(g, 7, n / 2 - 4, "W", 1, TEXT, null);
+        centered(g, n - 7, n / 2 - 4, "E", 1, TEXT, null);
+        return g;
+    }
+
+    /** A 16x16 map arrow (a chevron) pointing up; the map flips it and turns it with the player. */
+    static BufferedImage arrowMarker(Color fill, Color edge) {
+        BufferedImage g = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        // inside(x, y, grow): the chevron's head widens down to row 14, with a notch cut up into the tail
+        java.util.function.BiPredicate<Double, Double> in = (x, y) -> {
+            double d = Math.abs(x - 7.5);
+            return y >= 1 && y <= 14 && d <= (y - 1) * 0.5 + 0.5 && !(y > 8 && d < (y - 8) * 0.9);
+        };
+        for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
+            boolean core = in.test((double) x, (double) y);
+            boolean near = core || in.test(x - 1.0, (double) y) || in.test(x + 1.0, (double) y) || in.test((double) x, y - 1.0) || in.test((double) x, y + 1.0);
+            if (near && !core) g.setRGB(x, y, edge.getRGB());
+            else if (core) g.setRGB(x, y, fill.getRGB());
+        }
+        return g;
+    }
+
+    /** A 16x16 gold supply-drop chest with a glow, symmetric so the map's flip and turn don't show. */
+    static BufferedImage dropMarker() {
+        BufferedImage g = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        for (int x = 0; x < 16; x++) for (int y = 0; y < 16; y++) {
+            double d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+            if (d > 6.5 && d < 8) blend(g, x, y, alpha(GOLD, 110));
+        }
+        Color dark = new Color(0x5A3A00), gold = GOLD, light = new Color(0xFFF2A0);
+        for (int x = 2; x < 14; x++) for (int y = 3; y < 13; y++) {
+            boolean edge = x == 2 || x == 13 || y == 3 || y == 12 || y == 7 || y == 8;
+            g.setRGB(x, y, (edge ? dark : (y < 7 ? light : gold)).getRGB());
+        }
+        for (int y = 6; y < 10; y++) for (int x = 7; x < 9; x++) g.setRGB(x, y, new Color(0xFF2E63).getRGB()); // the latch
         return g;
     }
 
