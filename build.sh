@@ -6,6 +6,7 @@ set -e
 cd "$(dirname "$0")"
 JAVA="${JAVA:-$HOME/.local/jdks/jdk-25.0.5+8/bin/java}"
 rm -rf build && "$JAVA" src/Gen.java "$1" build
+mkdir -p build/assets/kitpvp/sounds && cp -r src/sounds/. build/assets/kitpvp/sounds/
 python3 -I - <<'P'
 import hashlib, os, zipfile, io
 buf = io.BytesIO()

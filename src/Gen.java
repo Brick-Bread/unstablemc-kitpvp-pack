@@ -45,12 +45,24 @@ public class Gen {
         save(crop(loadout()), out.resolve("assets/kitpvp/textures/gui/loadout.png"));
         save(crop(boards()), out.resolve("assets/kitpvp/textures/gui/boards.png"));
         save(logo(), out.resolve("pack.png"));
+        save(strike(), out.resolve("assets/kitpvp/textures/gui/strike.png"));
+        // strike and supply-drop sounds: the .ogg files come from sounds.sh (src/sounds), build.sh copies them
+        String[][] sfx = {{"strike.charge", "strike/charge", "Strike charging"}, {"strike.siren", "strike/siren", "Strike siren"},
+                {"strike.impact", "strike/impact", "Strike impact"}, {"drop.incoming", "drop/incoming", "Supply drop incoming"},
+                {"drop.land", "drop/land", "Supply drop lands"}};
+        StringBuilder sj = new StringBuilder("{\n");
+        for (int i = 0; i < sfx.length; i++) {
+            sj.append("  \"").append(sfx[i][0]).append("\": {\"sounds\": [{\"name\": \"kitpvp:").append(sfx[i][1])
+                    .append("\"}], \"subtitle\": \"").append(sfx[i][2]).append("\"}").append(i < sfx.length - 1 ? ",\n" : "\n");
+        }
+        write(out.resolve("assets/kitpvp/sounds.json"), sj.append("}\n").toString());
         write(out.resolve("assets/kitpvp/font/gui.json"), """
                 {
                   "providers": [
                     {"type": "bitmap", "file": "kitpvp:gui/kits.png", "ascent": 13, "height": 222, "chars": ["\\ue000"]},
                     {"type": "bitmap", "file": "kitpvp:gui/loadout.png", "ascent": 13, "height": 222, "chars": ["\\ue001"]},
                     {"type": "bitmap", "file": "kitpvp:gui/boards.png", "ascent": 13, "height": 222, "chars": ["\\ue002"]},
+                    {"type": "bitmap", "file": "kitpvp:gui/strike.png", "ascent": 16, "height": 24, "chars": ["\\ue003"]},
                     {"type": "space", "advances": {"\\uf000": -8, "\\uf001": -169}}
                   ]
                 }
@@ -313,6 +325,42 @@ public class Gen {
         ring(g, 7 + 2 * 18, 53, GOLD);
         ring(g, 7 + 3 * 18, 53, new Color(0xD7D7D7));
         ring(g, 7 + 4 * 18, 53, new Color(0xCD7F32));
+        return g;
+    }
+
+    /**
+     * The INCOMING STRIKE overlay (title glyph ): a red targeting reticle with corner
+     * brackets and a soft glow, 96x96, drawn at height 24 so the 4x title scale makes it large.
+     */
+    static BufferedImage strike() {
+        int n = 96;
+        BufferedImage g = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);
+        double c = (n - 1) / 2.0;
+        Color red = new Color(0xFF2E3A), hot = new Color(0xFFD0D0);
+        for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) {
+            double dx = x - c, dy = y - c, d = Math.sqrt(dx * dx + dy * dy);
+            // glow behind the ring
+            double glow = Math.max(0, 1 - Math.abs(d - 30) / 9);
+            if (glow > 0) blend(g, x, y, alpha(red, (int) (70 * glow * glow)));
+            // the ring, broken at the four ticks
+            boolean gap = Math.abs(dx) < 4 || Math.abs(dy) < 4;
+            if (Math.abs(d - 30) < 1.6 && !gap) blend(g, x, y, mix(red, hot, 0.25));
+            // inner ring
+            if (Math.abs(d - 12) < 1.0) blend(g, x, y, alpha(red, 200));
+            // ticks pointing in
+            boolean tick = (Math.abs(dx) < 1.2 && Math.abs(dy) > 16 && Math.abs(dy) < 40)
+                    || (Math.abs(dy) < 1.2 && Math.abs(dx) > 16 && Math.abs(dx) < 40);
+            if (tick) blend(g, x, y, red);
+            // centre diamond
+            if (Math.abs(dx) + Math.abs(dy) < 3.5) blend(g, x, y, hot);
+        }
+        // corner brackets
+        int a = 6, len = 14;
+        int[][] corners = {{a, a, 1, 1}, {n - 1 - a, a, -1, 1}, {a, n - 1 - a, 1, -1}, {n - 1 - a, n - 1 - a, -1, -1}};
+        for (int[] k : corners) for (int i = 0; i < len; i++) for (int w = 0; w < 2; w++) {
+            blend(g, k[0] + i * k[2], k[1] + w * k[3], red);
+            blend(g, k[0] + w * k[2], k[1] + i * k[3], red);
+        }
         return g;
     }
 
