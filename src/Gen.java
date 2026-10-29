@@ -32,6 +32,13 @@ public class Gen {
     static final Color TEXT = new Color(0xECE8F5);
     static final Color MUTED = new Color(0x9C95B8);
 
+    /**
+     * Core shaders are copies of 26.3's own and won't compile on any other version, which makes the
+     * whole pack fail to load there (FAILED_RELOAD). They live in an overlay applied only to 26.3's
+     * pack format (97.x), so other clients load the pack without them.
+     */
+    static final String SHADERS = "overlay_26_3/";
+
     public static void main(String[] a) throws IOException {
         font = ImageIO.read(new File(a[0]));
         for (int c = 0; c < 256; c++) {
@@ -48,26 +55,32 @@ public class Gen {
         save(strike(), out.resolve("assets/kitpvp/textures/gui/strike.png"));
         // the world border: prism texture, and the vanilla 26.3 shader with the border's
         // blue/red tint taken out (its alpha, the fade with distance, stays) so the design keeps its colours
-        save(forcefield(), out.resolve("assets/minecraft/textures/misc/forcefield.png"));
-        // the zone wall: item displays of kitpvp:zone_panel, a flat double-sided plane with an animated
-        // prism texture (32 frames, each the bands shifted one pixel, interpolated: a seamless loop)
-        save(zonePanel(), out.resolve("assets/kitpvp/textures/item/zone_panel.png"));
-        write(out.resolve("assets/kitpvp/textures/item/zone_panel.png.mcmeta"), """
-                {"animation": {"frametime": 2, "interpolate": true}}
-                """);
+        // the zone wall: item displays of kitpvp:zone_panel, a flat plane whose two faces differ: the
+        // inside (toward the safe zone) a prism diamond lattice, the outside red hazard stripes. Both are
+        // 32-frame interpolated animations that wrap exactly, so they loop without a seam.
+        for (String side : new String[]{"in", "out"}) {
+            save(zonePanel(side.equals("in")), out.resolve("assets/kitpvp/textures/item/zone_" + side + ".png"));
+            write(out.resolve("assets/kitpvp/textures/item/zone_" + side + ".png.mcmeta"), """
+                    {"animation": {"frametime": 2, "interpolate": true}}
+                    """);
+        }
         write(out.resolve("assets/kitpvp/items/zone_panel.json"), """
                 {"model": {"type": "minecraft:model", "model": "kitpvp:item/zone_panel"}}
                 """);
+        // south face (+z) = inside: the plugin turns each panel so +z points into the zone
         write(out.resolve("assets/kitpvp/models/item/zone_panel.json"), """
                 {
-                  "textures": {"0": "kitpvp:item/zone_panel", "particle": "kitpvp:item/zone_panel"},
+                  "textures": {"in": "kitpvp:item/zone_in", "out": "kitpvp:item/zone_out", "particle": "kitpvp:item/zone_in"},
                   "elements": [
                     {"from": [0, 0, 8], "to": [16, 16, 8], "shade": false, "light_emission": 15,
-                     "faces": {"north": {"uv": [0, 0, 16, 16], "texture": "#0"}, "south": {"uv": [16, 0, 0, 16], "texture": "#0"}}}
+                     "faces": {"south": {"uv": [0, 0, 16, 16], "texture": "#in"}, "north": {"uv": [16, 0, 0, 16], "texture": "#out"}}}
                   ]
                 }
                 """);
-        write(out.resolve("assets/minecraft/shaders/core/world_border.fsh"), """
+        // the border players see is KitPvP's own wall; the vanilla one (also used for the red screen
+        // warning near the edge) is drawn fully transparent
+        save(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), out.resolve("assets/minecraft/textures/misc/forcefield.png"));
+        write(out.resolve(SHADERS + "assets/minecraft/shaders/core/world_border.fsh"), """
                 #version 330
                 #extension GL_ARB_separate_shader_objects : require
 
@@ -154,6 +167,11 @@ public class Gen {
                     "description": "§dUnstableMC §fKitPvP",
                     "min_format": [97, 0],
                     "max_format": [120, 0]
+                  },
+                  "overlays": {
+                    "entries": [
+                      {"directory": "overlay_26_3", "min_format": [97, 0], "max_format": [97, 1]}
+                    ]
                   }
                 }
                 """);
@@ -562,6 +580,11 @@ public class Gen {
             fill(c, 0, row, 4, 1, PINK);
             fill(c, col, 0, 1, 4, PINK);
             save(c, tex.resolve("corner_" + k + ".png"));
+            // the same in purple: where the border will end up
+            BufferedImage e = new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB);
+            fill(e, 0, row, 4, 1, PURPLE);
+            fill(e, col, 0, 1, 4, PURPLE);
+            save(e, tex.resolve("end_" + k + ".png"));
         }
 
         StringBuilder f = new StringBuilder("{\n  \"providers\": [\n");
@@ -570,6 +593,7 @@ public class Gen {
         for (int r = 0; r < 88; r++) f.append(provider("self", 0xE300 + r, 5, -7 - r));
         for (int r = 0; r < 88; r++) f.append(provider("drop", 0xE400 + r, 5, -7 - r));
         for (int k = 0; k < 4; k++) for (int t = 0; t < 85; t++) f.append(provider("corner_" + corners[k], 0xE500 + k * 0x100 + t, 4, -9 - t));
+        for (int k = 0; k < 4; k++) for (int t = 0; t < 85; t++) f.append(provider("end_" + corners[k], 0xE900 + k * 0x100 + t, 4, -9 - t));
         f.append("    {\"type\": \"space\", \"advances\": {");
         for (int b = 0; b < 8; b++) f.append(String.format("\"\\u%04x\": %d, ", 0xF801 + b, -(1 << b)));
         for (int b = 0; b < 8; b++) f.append(String.format("\"\\u%04x\": %d%s", 0xF811 + b, 1 << b, b < 7 ? ", " : ""));
@@ -581,7 +605,7 @@ public class Gen {
             save(new BufferedImage(182, 5, BufferedImage.TYPE_INT_ARGB), out.resolve("assets/minecraft/textures/gui/sprites/boss_bar/" + s + ".png"));
 
         // vanilla 26.3 text.vsh, plus the HUD move for GUI text (IS_GUI); world text is untouched
-        write(out.resolve("assets/minecraft/shaders/core/text.vsh"), """
+        write(out.resolve(SHADERS + "assets/minecraft/shaders/core/text.vsh"), """
                 #version 330
                 #extension GL_ARB_separate_shader_objects : require
 
@@ -690,18 +714,34 @@ public class Gen {
     }
 
     /**
-     * The zone wall panel: 32x32 frames stacked 32 high, each one the diagonal prism bands moved one
-     * pixel along, so frame 32 wraps exactly onto frame 1. Tiled edge to edge on the wall, the bands
-     * line up across panels (the pattern repeats every 32 px both ways).
+     * A zone wall face: 32x32 frames stacked 32 high, each moved one step so frame 32 wraps onto frame 1.
+     * Inside: a faint prism wash under a bright diamond lattice (pink to purple), with a white scanline
+     * sweeping down. Outside: red and near-black hazard stripes sliding sideways.
+     * The patterns repeat every 32 px both ways, so neighbouring panels line up.
      */
-    static BufferedImage zonePanel() {
+    static BufferedImage zonePanel(boolean inside) {
         int n = 32, frames = 32;
         BufferedImage g = new BufferedImage(n, n * frames, BufferedImage.TYPE_INT_ARGB);
         int[] cols = {0xFF2E63, 0xFF7518, 0xFFD900, 0x3CFF6A, 0x29D4FF, 0x8A4BFF, 0xFF2E9A, 0xFF2E63};
         for (int f = 0; f < frames; f++) for (int x = 0; x < n; x++) for (int y = 0; y < n; y++) {
-            int c = cols[Math.floorMod(x + y + f, n) * 8 / n];
-            boolean glint = Math.floorMod(x - y + f * 2, n) == 0;
-            Color col = glint ? new Color(255, 255, 255, 150) : new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, 120);
+            Color col;
+            if (inside) {
+                int c = cols[Math.floorMod(x + y + f, n) * 8 / n];
+                col = new Color((c >> 16) & 255, (c >> 8) & 255, c & 255, 55);
+                // diamond lattice, 16 px cells
+                int d1 = Math.floorMod(x + y, 16), d2 = Math.floorMod(x - y, 16);
+                // the pink-purple blend repeats every 32 px too, so tile edges don't show
+                Color line = mix(PINK, PURPLE, 0.5 + 0.5 * Math.sin(2 * Math.PI * (x + y) / n));
+                if (d1 == 0 || d2 == 0) col = line;
+                else if (d1 == 1 || d2 == 1 || d1 == 15 || d2 == 15) col = alpha(line, 110);
+                // scanline sweeping down over the 32 frames
+                int scan = Math.floorMod(y - f, n);
+                if (scan == 0) col = new Color(255, 255, 255, 190);
+                else if (scan == 1) col = new Color(255, 255, 255, 90);
+            } else {
+                boolean red = Math.floorMod(x + y - f, 16) < 8;
+                col = red ? new Color(0xC0, 0x10, 0x28, 170) : new Color(0x14, 0x06, 0x0C, 140);
+            }
             g.setRGB(x, f * n + y, col.getRGB());
         }
         return g;
