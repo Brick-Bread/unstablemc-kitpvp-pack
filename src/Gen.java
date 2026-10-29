@@ -87,7 +87,9 @@ public class Gen {
                 }
                 """);
         // the radar (a held map): frame with compass letters, and its markers
+        // a map with data (the radar) is drawn on the checkerboard background in 26.x, so both get the frame
         save(mapFrame(), out.resolve("assets/minecraft/textures/map/map_background.png"));
+        save(mapFrame(), out.resolve("assets/minecraft/textures/map/map_background_checkerboard.png"));
         save(arrowMarker(new Color(0xFFFFFF), PINK), out.resolve("assets/minecraft/textures/map/decorations/player.png"));
         save(arrowMarker(new Color(0xFF3B4E), new Color(0x2A0008)), out.resolve("assets/minecraft/textures/map/decorations/red_marker.png"));
         save(dropMarker(), out.resolve("assets/minecraft/textures/map/decorations/target_x.png"));
