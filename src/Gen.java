@@ -232,7 +232,12 @@ public class Gen {
         // row 5: hint strip
         fill(g, 7, 107, 162, 18, new Color(0x151320));
         gradient(g, 7, 107, 162, 1, alpha(PINK, 140), alpha(PURPLE, 140));
-        centered(g, 88, 112, "LEFT: PICK    RIGHT: PREVIEW", 1, MUTED, null);
+        int w = 11 + textWidth("PICK", 1) + 14 + 11 + textWidth("PREVIEW", 1), x = 88 - w / 2;
+        mouse(g, x, 111, true);
+        text(g, x + 11, 112, "PICK", 1, MUTED, null, true);
+        x += 11 + textWidth("PICK", 1) + 14;
+        mouse(g, x, 111, false);
+        text(g, x + 11, 112, "PREVIEW", 1, MUTED, null, true);
         // the other row-4 slots aren't used: blend them into the panel
         for (int c = 0; c < 9; c++) if (c != 4) {
             fill(g, 7 + c * 18, 89, 18, 18, INNER);
@@ -240,6 +245,30 @@ public class Gen {
         gradient(g, 9, 97, 64, 1, alpha(PURPLE, 0), alpha(GOLD, 180));
         gradient(g, 103, 97, 64, 1, alpha(GOLD, 180), alpha(PURPLE, 0));
         return g;
+    }
+
+    /** A 7x10 mouse at (x, y) with the left or right button lit, for click hints. */
+    static void mouse(BufferedImage g, int x, int y, boolean left) {
+        String[] art = {
+                ".#####.",
+                "#ll#rr#",
+                "#ll#rr#",
+                "#ll#rr#",
+                "#######",
+                "#.....#",
+                "#.....#",
+                "#.....#",
+                "#.....#",
+                ".#####.",
+        };
+        Color body = new Color(0x2C2940), lit = PINK;
+        for (int j = 0; j < art.length; j++) for (int i = 0; i < 7; i++) {
+            char c = art[j].charAt(i);
+            Color col = c == '#' ? MUTED : c == 'l' ? (left ? lit : body) : c == 'r' ? (left ? body : lit) : body;
+            if (c == '.' && (j == 0 || j == art.length - 1)) continue; // rounded corners
+            blend(g, x + i + 1, y + j + 1, new Color(col.getRed() / 4, col.getGreen() / 4, col.getBlue() / 4));
+            g.setRGB(x + i, y + j, col.getRGB());
+        }
     }
 
     /** A 1px glow ring just inside a slot, item area stays clear. */
